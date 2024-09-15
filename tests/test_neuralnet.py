@@ -1,7 +1,97 @@
 # 素朴なニューラルネットワークをテスト
+import numpy as np
+import pytest
 
-from mydgms import neuralnet
+from mydgms.neuralnet import MyNeuralNet, ReLU, Dense
 
 
-def test_ニューラルネットワークの数値検証():
-    pass
+def test_ReLU層の数値検証():
+    # N: 2, d: 5, M: 5
+    relu = ReLU()
+    x = np.array([[0, 0.5, 1.0, 1.5, -2.0], [2.0, 0.5, -1.0, 1.5, 0.0]])
+
+    y = relu.forward(x=x)  # NxM = 2x5
+    np.testing.assert_allclose(y, np.array([[0, 0.5, 1.0, 1.5, 0.0], [2.0, 0.5, 0.0, 1.5, 0.0]]))
+
+
+def test_ReLU層の勾配検証():
+    # N: 2, d: 5, M: 5
+    relu = ReLU()
+    x = np.array([[0, 0.5, 1.0, 1.5, -2.0], [2.0, 0.5, -1.0, 1.5, 0.0]])
+
+    din = np.array([[0, 0.5, 1.0, 1.5, -2.0], [2.0, 0.5, -1.0, 1.5, 0.0]])  # NxM = 2x5
+
+    y, _ = relu.backward(x=x, din=din)  # NxM = 2x5
+
+    np.testing.assert_allclose(y, np.array([[0, 0.5, 1.0, 1.5, 0.0], [2.0, 0.5, 0.0, 1.5, 0.0]]))
+
+
+def test_Dense1層の数値検証():
+    # N: 2, d: 5, M: 2
+    dense = Dense(W=np.array([[-2, -1], [-1, -5], [0, 3], [1, -1], [2, -4]]), b=np.array([-1, 2]))
+    x = np.array([[0, 0.5, 1.0, 1.5, 2.0], [2.0, 0.5, 1.0, 1.5, 0.0]])
+
+    y = dense.forward(x=x)  # NxM = 2x2
+    np.testing.assert_allclose(y, np.array([[4.0, -7.0], [-4.0, -1.0]]))
+
+
+def test_Dense1層の勾配検証():
+    # N: 2, d: 5, M: 2
+    dense = Dense(W=np.array([[-2, -1], [-1, -5], [0, 3], [1, -1], [2, -4]]), b=np.array([-1, 2]))
+    x = np.array([[0, 0.5, 1.0, 1.5, 2.0], [2.0, 0.5, 1.0, 1.5, 0.0]])
+
+    din = np.array([[-3.0, 3.0], [10.0, -10.0]])  # NxM
+    dout, grads = dense.backward(x=x, din=din)
+    # dout: Nxd
+    # grads["W"]: dxM
+    # grads["b"]: M
+
+    np.testing.assert_allclose(dout, np.array([[3.0, -12.0, 9.0, -6.0, -18.0], [-10.0, 40.0, -30.0, 20.0, 60.0]]))
+    np.testing.assert_allclose(
+        grads["W"], np.array([[20.0, -20.0], [3.5, -3.5], [7.0, -7.0], [10.5, -10.5], [-6.0, 6.0]])
+    )
+    np.testing.assert_allclose(grads["b"], np.array([7.0, -7.0]))
+
+
+def test_簡単なニューラルネットワークの数値検証():
+    # N: 2, d: 5, M: 2
+    # 準備
+    net = MyNeuralNet(
+        layers=[
+            Dense(W=np.array([[-2, -1], [-1, -5], [0, 3], [1, -1], [2, -4]]), b=np.array([-1, 2])),
+            ReLU(),
+        ],
+        d_input=5,
+        d_output=2,
+    )
+    x = np.array([[0, 0.5, 1.0, 1.5, 2.0], [2.0, 0.5, 1.0, 1.5, 3.0]])
+
+    # 実行
+    y, us = net.forward(x=x)  # NxM=2x2
+
+    # 検証
+    np.testing.assert_allclose(y, np.array([[4.0, 0.0], [2.0, 0.0]]))
+    np.testing.assert_allclose(us[0], np.array([[0, 0.5, 1.0, 1.5, 2.0], [2.0, 0.5, 1.0, 1.5, 3.0]]))
+    np.testing.assert_allclose(us[1], np.array([[4.0, -7.0], [2.0, -13.0]]))
+
+
+def test_簡単なニューラルネットワークの勾配検証():
+    # N: 2, d: 5, M: 2
+    # 準備
+    net = MyNeuralNet(
+        layers=[
+            Dense(W=np.array([[-2, -1], [-1, -5], [0, 3], [1, -1], [2, -4]]), b=np.array([-1, 2])),
+            ReLU(),
+        ],
+        d_input=5,
+        d_output=2,
+    )
+    x = np.array([[0, 0.5, 1.0, 1.5, 2.0], [2.0, 0.5, 1.0, 1.5, 3.0]])
+    din = np.array([[-3.0, 3.0], [10.0, -10.0]])  # NxM = 2x2
+
+    # 実行
+    grads = net.gradient(x=x, din=din)
+
+    # 検証
+    np.testing.assert_allclose(grads[0]["W"], np.array([[20.0, 0.0], [3.5, 0.0], [7.0, 0.0], [10.5, 0.0], [24.0, 0.0]]))
+    np.testing.assert_allclose(grads[0]["b"], np.array([7.0, 0.0]))
