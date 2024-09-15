@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass, field
 import numpy as np
+from typing import Self
 
 Tensor = np.ndarray
 
@@ -13,6 +14,9 @@ class Layer:
         raise NotImplementedError()
 
     def backward(self, x: Tensor, din: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
+        raise NotImplementedError()
+
+    def update(self, grad: dict[str, Tensor], learning_rate: float) -> Self:
         raise NotImplementedError()
 
 
@@ -42,6 +46,9 @@ class ReLU(Layer):
             N x d
         """
         return din * np.where(x > 0, 1, 0), {}
+
+    def update(self, grad: dict[str, Tensor], learning_rate: float) -> Self:
+        return self
 
 
 @dataclass
@@ -91,6 +98,11 @@ class Dense(Layer):
 
         dout = np.dot(din, self.W.T)  # N x d
         return dout, {"W": grad_W, "b": grad_b}
+
+    def update(self, grad: dict[str, Tensor], learning_rate: float) -> Self:
+        W_next = self.W - learning_rate * grad["W"]
+        b_next = self.b - learning_rate * grad["b"]
+        return Dense(W=W_next, b=b_next)
 
 
 @dataclass
@@ -152,10 +164,18 @@ class MyNeuralNet:
             grads.append(grad)
         return dout, grads[::-1]
 
+    def update(self, grads: list[dict[str, Tensor]], learning_rate: float) -> Self:
+        new_layers = [layer.update(grad, learning_rate) for layer, grad in zip(self.layers, grads)]
+        return MyNeuralNet(layers=new_layers, d_input=self.d_input, d_output=self.d_output)
+
 
 @dataclass
 class Loss:
-    pass
+    def eval():
+        pass
+
+    def gradient():
+        pass
 
 
 @dataclass
