@@ -114,7 +114,7 @@ def test_二乗誤差関数の評価():
 
     l = sqloss.eval(net=net, X=x, y=y)
 
-    assert l == 44.5
+    assert l == 22.25
 
 
 def test_二乗誤差関数の勾配計算():
@@ -135,8 +135,8 @@ def test_二乗誤差関数の勾配計算():
     grads = sqloss.gradient(net=net, X=x, y=y)
 
     np.testing.assert_allclose(
-        grads[0]["W"], np.array([[32.0, 0.0], [13.0, 0.0], [26.0, 0.0], [39.0, 0.0], [68.0, 0.0]])
+        grads[0]["W"], np.array([[16.0, 0.0], [6.5, 0.0], [13.0, 0.0], [19.5, 0.0], [34.0, 0.0]])
     )
-    np.testing.assert_allclose(grads[0]["b"], np.array([26.0, 0.0]))
-    np.testing.assert_allclose(grads[2]["W"], np.array([[-36.0], [0.0]]))
-    np.testing.assert_allclose(grads[2]["b"], np.array([-13.0]))
+    np.testing.assert_allclose(grads[0]["b"], np.array([13.0, 0.0]))
+    np.testing.assert_allclose(grads[2]["W"], np.array([[-18.0], [0.0]]))
+    np.testing.assert_allclose(grads[2]["b"], np.array([-6.5]))
