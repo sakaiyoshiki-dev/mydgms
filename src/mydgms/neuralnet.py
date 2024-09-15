@@ -130,7 +130,11 @@ class MyNeuralNet:
             x_l = layer.forward(x_l)
         return x_l, us
 
-    def gradient(self, x: Tensor, din: Tensor) -> list[dict[str, Tensor]]:
+    def gradient(self, x: Tensor, din: Tensor) -> tuple[Tensor, list[dict[str, Tensor]]]:
+        """
+        x: Tensor
+        din: Tensor
+        """
         if x.shape[1] != self.d_input:
             raise ValueError(f"{x.shape[1]=}は {self.d_input=}と等しい必要があります。")
         if din.shape[1] != self.d_output:
@@ -140,7 +144,33 @@ class MyNeuralNet:
 
         y, us = self.forward(x=x)  # まず順伝播で途中の計算履歴を取得
         grads = []
+        dout, _ = self.layers[-1].backward(x=us[-1], din=din)  # 最終層の勾配dy/duを計算
+
+        # 誤差逆伝播法で各パラメータの勾配を計算
         for layer, u in zip(self.layers[::-1], us[::-1]):
             din, grad = layer.backward(x=u, din=din)
             grads.append(grad)
-        return grads[::-1]
+        return dout, grads[::-1]
+
+
+@dataclass
+class Loss:
+    pass
+
+
+@dataclass
+class SquaredLoss(Loss):
+    def eval(self, net: MyNeuralNet, X: Tensor, y: Tensor) -> float:
+        # 損失関数の計算
+        y_pred, _ = net.forward(x=X)
+        return np.sum((y_pred - y) ** 2) / 2
+
+    def backward(self, net: MyNeuralNet, X: Tensor, y: Tensor) -> Tensor:
+        # 損失関数の逆伝播
+        y_pred, _ = net.forward(x=X)
+        return y_pred - y
+
+    def gradient(self, net: MyNeuralNet, X: Tensor, y: Tensor) -> list[dict[str, Tensor]]:
+        din = self.backward(net=net, X=X, y=y)
+        _, grads = net.gradient(x=X, din=din)
+        return grads

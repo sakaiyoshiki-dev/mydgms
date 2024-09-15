@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from mydgms.neuralnet import MyNeuralNet, ReLU, Dense
+from mydgms.neuralnet import MyNeuralNet, ReLU, Dense, SquaredLoss
 
 
 def test_ReLU層の数値検証():
@@ -90,8 +90,53 @@ def test_簡単なニューラルネットワークの勾配検証():
     din = np.array([[-3.0, 3.0], [10.0, -10.0]])  # NxM = 2x2
 
     # 実行
-    grads = net.gradient(x=x, din=din)
+    dout, grads = net.gradient(x=x, din=din)
 
     # 検証
     np.testing.assert_allclose(grads[0]["W"], np.array([[20.0, 0.0], [3.5, 0.0], [7.0, 0.0], [10.5, 0.0], [24.0, 0.0]]))
     np.testing.assert_allclose(grads[0]["b"], np.array([7.0, 0.0]))
+
+
+def test_二乗誤差関数の評価():
+
+    net = MyNeuralNet(
+        layers=[
+            Dense(W=np.array([[-2, -1], [-1, -5], [0, 3], [1, -1], [2, -4]]), b=np.array([-1, 2])),
+            ReLU(),
+            Dense(W=np.array([[-2], [-1]]), b=np.array([0])),
+        ],
+        d_input=5,
+        d_output=1,
+    )
+    x = np.array([[0, 0.5, 1.0, 1.5, 2.0], [2.0, 0.5, 1.0, 1.5, 3.0]])
+    y = np.array([[-3], [4.0]])
+    sqloss = SquaredLoss()
+
+    l = sqloss.eval(net=net, X=x, y=y)
+
+    assert l == 44.5
+
+
+def test_二乗誤差関数の勾配計算():
+
+    net = MyNeuralNet(
+        layers=[
+            Dense(W=np.array([[-2, -1], [-1, -5], [0, 3], [1, -1], [2, -4]]), b=np.array([-1, 2])),
+            ReLU(),
+            Dense(W=np.array([[-2], [-1]]), b=np.array([0])),
+        ],
+        d_input=5,
+        d_output=1,
+    )
+    x = np.array([[0, 0.5, 1.0, 1.5, 2.0], [2.0, 0.5, 1.0, 1.5, 3.0]])
+    y = np.array([[-3], [4.0]])
+    sqloss = SquaredLoss()
+
+    grads = sqloss.gradient(net=net, X=x, y=y)
+
+    np.testing.assert_allclose(
+        grads[0]["W"], np.array([[32.0, 0.0], [13.0, 0.0], [26.0, 0.0], [39.0, 0.0], [68.0, 0.0]])
+    )
+    np.testing.assert_allclose(grads[0]["b"], np.array([26.0, 0.0]))
+    np.testing.assert_allclose(grads[2]["W"], np.array([[-36.0], [0.0]]))
+    np.testing.assert_allclose(grads[2]["b"], np.array([-13.0]))
