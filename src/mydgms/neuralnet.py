@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass, field
 import numpy as np
+from typing import Self
 
 Tensor = np.ndarray
 
@@ -13,6 +14,9 @@ class Layer:
         raise NotImplementedError()
 
     def backward(self, x: Tensor, din: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
+        raise NotImplementedError()
+
+    def update(self, grad: dict[str, Tensor], learning_rate: float) -> Self:
         raise NotImplementedError()
 
 
@@ -42,6 +46,9 @@ class ReLU(Layer):
             N x d
         """
         return din * np.where(x > 0, 1, 0), {}
+
+    def update(self, grad: dict[str, Tensor], learning_rate: float) -> Self:
+        return self
 
 
 @dataclass
@@ -92,6 +99,11 @@ class Dense(Layer):
         dout = np.dot(din, self.W.T)  # N x d
         return dout, {"W": grad_W, "b": grad_b}
 
+    def update(self, grad: dict[str, Tensor], learning_rate: float) -> Self:
+        W_next = self.W - learning_rate * grad["W"]
+        b_next = self.b - learning_rate * grad["b"]
+        return Dense(W=W_next, b=b_next)
+
 
 @dataclass
 class MyNeuralNet:
@@ -130,7 +142,11 @@ class MyNeuralNet:
             x_l = layer.forward(x_l)
         return x_l, us
 
-    def gradient(self, x: Tensor, din: Tensor) -> list[dict[str, Tensor]]:
+    def gradient(self, x: Tensor, din: Tensor) -> tuple[Tensor, list[dict[str, Tensor]]]:
+        """
+        x: Tensor
+        din: Tensor
+        """
         if x.shape[1] != self.d_input:
             raise ValueError(f"{x.shape[1]=}は {self.d_input=}と等しい必要があります。")
         if din.shape[1] != self.d_output:
@@ -140,7 +156,41 @@ class MyNeuralNet:
 
         y, us = self.forward(x=x)  # まず順伝播で途中の計算履歴を取得
         grads = []
+        dout, _ = self.layers[-1].backward(x=us[-1], din=din)  # 最終層の勾配dy/duを計算
+
+        # 誤差逆伝播法で各パラメータの勾配を計算
         for layer, u in zip(self.layers[::-1], us[::-1]):
             din, grad = layer.backward(x=u, din=din)
             grads.append(grad)
-        return grads[::-1]
+        return dout, grads[::-1]
+
+    def update(self, grads: list[dict[str, Tensor]], learning_rate: float) -> Self:
+        new_layers = [layer.update(grad, learning_rate) for layer, grad in zip(self.layers, grads)]
+        return MyNeuralNet(layers=new_layers, d_input=self.d_input, d_output=self.d_output)
+
+
+@dataclass
+class Loss:
+    def eval():
+        pass
+
+    def gradient():
+        pass
+
+
+@dataclass
+class SquaredLoss(Loss):
+    def eval(self, net: MyNeuralNet, X: Tensor, y: Tensor) -> float:
+        # 損失関数の計算
+        y_pred, _ = net.forward(x=X)
+        return np.sum((y_pred - y) ** 2) / 2
+
+    def backward(self, net: MyNeuralNet, X: Tensor, y: Tensor) -> Tensor:
+        # 損失関数の逆伝播
+        y_pred, _ = net.forward(x=X)
+        return y_pred - y
+
+    def gradient(self, net: MyNeuralNet, X: Tensor, y: Tensor) -> list[dict[str, Tensor]]:
+        din = self.backward(net=net, X=X, y=y)
+        _, grads = net.gradient(x=X, din=din)
+        return grads
