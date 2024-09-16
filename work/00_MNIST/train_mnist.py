@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 
-from mydgms.neuralnet import MyNeuralNet, Dense, ReLU, SquaredLoss
+from mydgms.neuralnet import MyNeuralNet, Dense, ReLU, Softmax, SquaredLoss
 from mydgms.training import train_mgd
 from sklearn.datasets import fetch_openml
 from sklearn.model_selection import train_test_split
@@ -11,13 +11,13 @@ from sklearn.preprocessing import LabelBinarizer
 
 # %%
 #  MNISTデータセットの読み込み
-mnist = fetch_openml("mnist_784")
+# mnist = fetch_openml("mnist_784")
 
-# 特徴量とラベルに分ける
-X, y = mnist["data"], mnist["target"]
+# # 特徴量とラベルに分ける
+# X, y = mnist["data"], mnist["target"]
 
-X.to_csv("./input/mnist_data.csv")
-y.to_csv("./input/mnist_target.csv")
+# X.to_csv("./input/mnist_data.csv")
+# y.to_csv("./input/mnist_target.csv")
 
 # %%
 X = pd.read_csv("./input/mnist_data.csv", index_col=0)
@@ -41,11 +41,14 @@ y_test = lb.transform(y_test)
 # X_train = X_train.reshape(-1, 28, 28, 1)
 # X_test = X_test.reshape(-1, 28, 28, 1)
 
+# %%
+# 学習
 init_net = MyNeuralNet(
     layers=[
-        Dense.init(d=784, M=30),
+        Dense.init(d=784, M=30, rand=True),
         ReLU(),
-        Dense.init(d=30, M=10),
+        Dense.init(d=30, M=10, rand=True),
+        Softmax(),
     ],
     d_input=784,
     d_output=10,
@@ -58,12 +61,22 @@ trained_net: MyNeuralNet = train_mgd(
     loss=loss,
     X=X_train.values,
     y=y_train,
-    n_epochs=1000,
-    batch_size=20,
-    learning_rate=1.0,
+    n_epochs=100,
+    batch_size=100,
+    learning_rate=0.05,
 )
 
-test_loss = loss.eval(trained_net, X=X_test.values, y=y_test)
-assert test_loss
+# うまく学習できることもあるが。
+# 全然学習が始まらなかったり、途中で急に悪化することがある。
+# 学習率が一番の肝、その次にbatch_sizeか？
+# また numpy の OPENBLAS_NUM_THREADS 変数も影響していそう。
+
+# %%
+# 検証
+np.set_printoptions(precision=3, suppress=True)
+y_pred, _ = trained_net.forward(X_test.values)
+for y_p, y_t in zip(y_pred, y_test):
+    print((y_p * y_t).sum())
+# test_loss = loss.eval(trained_net, X=X_test.values, y=y_test)
 
 # %%
