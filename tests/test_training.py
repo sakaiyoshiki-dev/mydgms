@@ -22,7 +22,15 @@ def test_ミニバッチ勾配法():
     loss = SquaredLoss()
 
     # 実行
-    trained_net: MyNeuralNet = train_mgd(init_net=init_net, loss=loss, X=X, y=y)
+    trained_net: MyNeuralNet = train_mgd(
+        init_net=init_net,
+        loss=loss,
+        X=X,
+        y=y,
+        n_epochs=1000,
+        batch_size=20,
+        learning_rate=0.01,
+    )
 
     # 検証
     assert loss.eval(net=trained_net, X=X, y=y) <= 0.001

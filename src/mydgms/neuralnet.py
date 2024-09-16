@@ -10,13 +10,15 @@ Tensor = np.ndarray
 
 @dataclass
 class Layer:
+    """ニューラルネットワークの層の基底クラス"""
+
     def forward(self, x: Tensor) -> Tensor:
         raise NotImplementedError()
 
     def backward(self, x: Tensor, din: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
         raise NotImplementedError()
 
-    def update(self, grad: dict[str, Tensor], learning_rate: float) -> Self:
+    def update(self, params_step: dict[str, Tensor]) -> Self:
         raise NotImplementedError()
 
 
@@ -27,6 +29,16 @@ class ReLU(Layer):
     """
 
     def forward(self, x: Tensor) -> Tensor:
+        """ReLU関数の計算
+        Parameters
+        ----------
+        x: Tensor
+            N x d
+
+        Return
+        Tensor
+            N x d
+        """
         return np.maximum(0, x)
 
     def backward(self, x: Tensor, din: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
@@ -39,15 +51,39 @@ class ReLU(Layer):
             この層の入力であって、ニューラルネットワーク全体の入力ではない点に注意
         din: Tensor
             N x d
+            上の層から降ってきた勾配dy/du
 
         Returns
         -------
-        dout: Tensor
+        Tensor
             N x d
+            下の層へ降ろす勾配dy/dx
+        dict[str, Tensor]
+            この層のパラメータについての勾配
         """
         return din * np.where(x > 0, 1, 0), {}
 
-    def update(self, grad: dict[str, Tensor], learning_rate: float) -> Self:
+    def update(self, params_step: dict[str, Tensor]) -> Self:
+        """パラメータをparams_stepの方向に更新する"""
+        return self
+
+
+@dataclass
+class Softmax(Layer):
+    def softmax(self, x: Tensor) -> Tensor:
+        # 数値安定化のために最大値を引く
+        x = x - np.max(x, axis=1, keepdims=True)
+        exp_x = np.exp(x)
+        return exp_x / np.sum(exp_x, axis=1, keepdims=True)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.softmax(x=x)
+
+    def backward(self, x: Tensor, din: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
+        y = self.forward(x=x)
+        return din * y * (1 - y), {}
+
+    def update(self, params_step: dict[str, Tensor]) -> Self:
         return self
 
 
@@ -72,6 +108,17 @@ class Dense(Layer):
             raise ValueError(f"{self.W.shape=}, {self.b.shape=}")
 
     def forward(self, x: Tensor) -> Tensor:
+        """全結合層の計算
+        Parameters
+        ----------
+        x: Tensor
+            N x d
+
+        Return
+        ------
+        Tensor
+            N x M
+        """
         return np.dot(x, self.W) + self.b
 
     def backward(self, x: Tensor, din: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
@@ -99,10 +146,22 @@ class Dense(Layer):
         dout = np.dot(din, self.W.T)  # N x d
         return dout, {"W": grad_W, "b": grad_b}
 
-    def update(self, grad: dict[str, Tensor], learning_rate: float) -> Self:
-        W_next = self.W - learning_rate * grad["W"]
-        b_next = self.b - learning_rate * grad["b"]
-        return Dense(W=W_next, b=b_next)
+    def update(self, params_step: dict[str, Tensor]) -> Self:
+        """パラメータをparams_stepの方向に更新した新しい層を返す"""
+        return Dense(
+            W=self.W + params_step["W"],
+            b=self.b + params_step["b"],
+        )
+
+    @classmethod
+    def init(cls: Self, d, M, rand=False) -> Self:
+        if rand:
+            W = np.random.random(size=(d, M)) - 0.5
+            b = np.random.random(size=M) - 0.5
+        else:
+            W = np.zeros((d, M))
+            b = np.zeros(M)
+        return cls(W=W, b=b)
 
 
 @dataclass
@@ -164,8 +223,12 @@ class MyNeuralNet:
             grads.append(grad)
         return dout, grads[::-1]
 
-    def update(self, grads: list[dict[str, Tensor]], learning_rate: float) -> Self:
-        new_layers = [layer.update(grad, learning_rate) for layer, grad in zip(self.layers, grads)]
+    def update(self, params_step: list[dict[str, Tensor]]) -> Self:
+        """
+        パラメータ群を更新する
+        いまのインスタンスは更新せず、新しいインスタンスを生成する。
+        """
+        new_layers = [layer.update(param_step) for layer, param_step in zip(self.layers, params_step)]
         return MyNeuralNet(layers=new_layers, d_input=self.d_input, d_output=self.d_output)
 
 
@@ -181,16 +244,50 @@ class Loss:
 @dataclass
 class SquaredLoss(Loss):
     def eval(self, net: MyNeuralNet, X: Tensor, y: Tensor) -> float:
-        # 損失関数の計算
+        """二乗誤差関数の計算
+        Parameters
+        ----------
+        net: MyNeuralNet
+        X: Tensor
+        y: Tensor
+
+        Return
+        ------
+        float
+            二乗誤差の数値
+        """
         y_pred, _ = net.forward(x=X)
-        return np.sum((y_pred - y) ** 2) / 2
+        return np.sum((y_pred - y) ** 2) / y.shape[0] / 2
 
     def backward(self, net: MyNeuralNet, X: Tensor, y: Tensor) -> Tensor:
-        # 損失関数の逆伝播
+        """二乗誤差関数の逆伝播
+        Parameters
+        ----------
+        net: MyNeuralNet
+        X: Tensor
+        y: Tensor
+
+        Return
+        ------
+        Tensor
+            ニューラルネットワークに渡すdy/du
+        """
         y_pred, _ = net.forward(x=X)
-        return y_pred - y
+        return (y_pred - y) / y.shape[0]
 
     def gradient(self, net: MyNeuralNet, X: Tensor, y: Tensor) -> list[dict[str, Tensor]]:
+        """二乗誤差関数の勾配計算
+        Parameters
+        ----------
+        net: MyNeuralNet
+        X: Tensor
+        y: Tensor
+
+        Return
+        ------
+        list[dict[str, Tensor]
+            各層の、パラメータごとの勾配ベクトル
+        """
         din = self.backward(net=net, X=X, y=y)
         _, grads = net.gradient(x=X, din=din)
         return grads
