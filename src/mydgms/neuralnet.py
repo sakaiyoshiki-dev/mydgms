@@ -15,7 +15,7 @@ class Layer:
     def forward(self, x: Tensor) -> Tensor:
         raise NotImplementedError()
 
-    def backward(self, x: Tensor, din: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
+    def backward(self, x: Tensor, dout: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
         raise NotImplementedError()
 
     def update(self, params_step: dict[str, Tensor]) -> Self:
@@ -41,7 +41,7 @@ class ReLU(Layer):
         """
         return np.maximum(0, x)
 
-    def backward(self, x: Tensor, din: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
+    def backward(self, x: Tensor, dout: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
         """
         ReLU層の逆伝播
         Parameters
@@ -49,7 +49,7 @@ class ReLU(Layer):
         x : Tensor
             N x d
             この層の入力であって、ニューラルネットワーク全体の入力ではない点に注意
-        din: Tensor
+        dout: Tensor
             N x d
             上の層から降ってきた勾配dy/du
 
@@ -61,7 +61,7 @@ class ReLU(Layer):
         dict[str, Tensor]
             この層のパラメータについての勾配
         """
-        return din * np.where(x > 0, 1, 0), {}
+        return dout * np.where(x > 0, 1, 0), {}
 
     def update(self, params_step: dict[str, Tensor]) -> Self:
         """パラメータをparams_stepの方向に更新する"""
@@ -79,9 +79,9 @@ class Softmax(Layer):
     def forward(self, x: Tensor) -> Tensor:
         return self.softmax(x=x)
 
-    def backward(self, x: Tensor, din: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
+    def backward(self, x: Tensor, dout: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
         y = self.forward(x=x)
-        return din * y * (1 - y), {}
+        return dout * y * (1 - y), {}
 
     def update(self, params_step: dict[str, Tensor]) -> Self:
         return self
@@ -121,14 +121,14 @@ class Dense(Layer):
         """
         return np.dot(x, self.W) + self.b
 
-    def backward(self, x: Tensor, din: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
+    def backward(self, x: Tensor, dout: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
         """
         Parameters
         ----------
         x : Tensor
             N x d
             この層の入力であって、ニューラルネットワーク全体の入力ではない点に注意
-        din: Tensor
+        dout: Tensor
             N x M
 
         Returns
@@ -140,11 +140,11 @@ class Dense(Layer):
         grad_b
             M
         """
-        grad_W = np.dot(x.T, din)  # d x M
-        grad_b = din.sum(axis=0)  # M
+        grad_W = np.dot(x.T, dout)  # d x M
+        grad_b = dout.sum(axis=0)  # M
 
-        dout = np.dot(din, self.W.T)  # N x d
-        return dout, {"W": grad_W, "b": grad_b}
+        din = np.dot(dout, self.W.T)  # N x d
+        return din, {"W": grad_W, "b": grad_b}
 
     def update(self, params_step: dict[str, Tensor]) -> Self:
         """パラメータをparams_stepの方向に更新した新しい層を返す"""
@@ -201,27 +201,27 @@ class MyNeuralNet:
             x_l = layer.forward(x_l)
         return x_l, us
 
-    def gradient(self, x: Tensor, din: Tensor) -> tuple[Tensor, list[dict[str, Tensor]]]:
+    def gradient(self, x: Tensor, dout: Tensor) -> tuple[Tensor, list[dict[str, Tensor]]]:
         """
         x: Tensor
-        din: Tensor
+        dout: Tensor
         """
         if x.shape[1] != self.d_input:
             raise ValueError(f"{x.shape[1]=}は {self.d_input=}と等しい必要があります。")
-        if din.shape[1] != self.d_output:
-            raise ValueError(f"{din.shape[1]=}は {self.d_output=}と等しい必要があります。")
-        if x.shape[0] != din.shape[0]:
-            raise ValueError(f"{x.shape[0]=}は {din.shape[0]=}と等しい必要があります。")
+        if dout.shape[1] != self.d_output:
+            raise ValueError(f"{dout.shape[1]=}は {self.d_output=}と等しい必要があります。")
+        if x.shape[0] != dout.shape[0]:
+            raise ValueError(f"{x.shape[0]=}は {dout.shape[0]=}と等しい必要があります。")
 
         y, us = self.forward(x=x)  # まず順伝播で途中の計算履歴を取得
         grads = []
-        dout, _ = self.layers[-1].backward(x=us[-1], din=din)  # 最終層の勾配dy/duを計算
+        din, _ = self.layers[-1].backward(x=us[-1], dout=dout)  # 最終層の勾配dy/duを計算
 
         # 誤差逆伝播法で各パラメータの勾配を計算
         for layer, u in zip(self.layers[::-1], us[::-1]):
-            din, grad = layer.backward(x=u, din=din)
+            dout, grad = layer.backward(x=u, dout=dout)
             grads.append(grad)
-        return dout, grads[::-1]
+        return din, grads[::-1]
 
     def update(self, params_step: list[dict[str, Tensor]]) -> Self:
         """
@@ -289,5 +289,5 @@ class SquaredLoss(Loss):
             各層の、パラメータごとの勾配ベクトル
         """
         din = self.backward(net=net, X=X, y=y)
-        _, grads = net.gradient(x=X, din=din)
+        _, grads = net.gradient(x=X, dout=din)
         return grads
