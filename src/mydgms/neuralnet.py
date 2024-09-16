@@ -154,9 +154,13 @@ class Dense(Layer):
         )
 
     @classmethod
-    def init(cls: Self, d, M) -> Self:
-        W = np.zeros((d, M))
-        b = np.zeros(M)
+    def init(cls: Self, d, M, rand=False) -> Self:
+        if rand:
+            W = np.random.random(size=(d, M)) - 0.5
+            b = np.random.random(size=M) - 0.5
+        else:
+            W = np.zeros((d, M))
+            b = np.zeros(M)
         return cls(W=W, b=b)
 
 
