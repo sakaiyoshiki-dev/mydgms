@@ -23,6 +23,7 @@ def train_mgd(
     n_epochs: int,
     batch_size: int,
     learning_rate: float,
+    tolerance: float,
     X_test: Tensor = None,
     y_test: Tensor = None,
 ) -> MyNeuralNet:
@@ -30,7 +31,6 @@ def train_mgd(
     ニューラルネットワークを訓練する。
     最適化アルゴリズムはミニバッチ勾配降下法を採用する。
     """
-    tolerance = 1e-5
     n_samples = X.shape[0]
 
     # メインループ
@@ -61,7 +61,9 @@ def train_mgd(
             test_loss = None
             if isinstance(X_test, Tensor):
                 test_loss = loss.eval(net=net, X=X_test, y=y_test)
-            print(f"{epoch=}, {train_loss=:.4f}, {test_loss=: .4f}, {loss_change=:.6f}")
+                print(f"{epoch=}, {train_loss=:.4f}, {test_loss=: .4f}, {loss_change=:.6f}")
+            else:
+                print(f"{epoch=}, {train_loss=:.4f}, {loss_change=:.6f}")
 
         # 収束判定
         if loss_change < tolerance:

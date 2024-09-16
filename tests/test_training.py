@@ -30,6 +30,7 @@ def test_ミニバッチ勾配法():
         n_epochs=1000,
         batch_size=20,
         learning_rate=0.01,
+        tolerance=1e-7,
     )
 
     # 検証
