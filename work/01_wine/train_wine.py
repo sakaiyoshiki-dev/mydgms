@@ -13,21 +13,18 @@ from sklearn.preprocessing import LabelBinarizer
 
 
 # %%
-#  MNISTデータセットの読み込み
-# mnist = fetch_openml("mnist_784")
+# wineデータセットの読み込み
+# wine = fetch_openml("wine")
 
 # # 特徴量とラベルに分ける
-# X, y = mnist["data"], mnist["target"]
+# X, y = wine["data"], wine["target"]
 
-# X.to_csv("./input/mnist_data.csv")
-# y.to_csv("./input/mnist_target.csv")
+# X.to_csv("./input/wine_data.csv")
+# y.to_csv("./input/wine_target.csv")
 
 # %%
-X = pd.read_csv("./input/mnist_data.csv", index_col=0)
-y = pd.read_csv("./input/mnist_target.csv", index_col=0).squeeze()
-
-# データの正規化 (0-255のピクセル値を0-1の範囲に)
-X = X.astype("float32") / 255.0
+X = pd.read_csv("./input/wine_data.csv", index_col=0)
+y = pd.read_csv("./input/wine_target.csv", index_col=0).squeeze()
 
 # ラベルを数値に変換
 y = y.astype("int")
@@ -40,21 +37,19 @@ lb = LabelBinarizer()
 y_train = lb.fit_transform(y_train)
 y_test = lb.transform(y_test)
 
-# データをニューラルネットワークの入力形式にリシェイプ (28x28の画像)
-# X_train = X_train.reshape(-1, 28, 28, 1)
-# X_test = X_test.reshape(-1, 28, 28, 1)
-
 # %%
 # 学習
 init_net = MyNeuralNet(
     layers=[
-        Dense.init(d=784, M=30, rand=True),
+        Dense.init(d=13, M=5, rand=True),
         ReLU(),
-        Dense.init(d=30, M=10, rand=True),
+        Dense.init(d=5, M=2, rand=True),
+        ReLU(),
+        Dense.init(d=2, M=3, rand=True),
         Softmax(),
     ],
-    d_input=784,
-    d_output=10,
+    d_input=13,
+    d_output=3,
 )
 loss = SquaredLoss()
 
@@ -64,9 +59,9 @@ trained_net: MyNeuralNet = train_mgd(
     loss=loss,
     X=X_train.values,
     y=y_train,
-    n_epochs=100,
-    batch_size=50,
-    learning_rate=0.1,
+    n_epochs=1000,
+    batch_size=3,
+    learning_rate=0.01,
     X_test=X_test.values,
     y_test=y_test,
 )
@@ -78,10 +73,9 @@ trained_net: MyNeuralNet = train_mgd(
 
 # %%
 # 検証
-np.set_printoptions(precision=3, suppress=True)
+from sklearn.metrics import roc_auc_score
+
 y_pred, _ = trained_net.forward(X_test.values)
-for y_p, y_t in zip(y_pred, y_test):
-    print((y_p * y_t).sum())
-# test_loss = loss.eval(trained_net, X=X_test.values, y=y_test)
+print(roc_auc_score(y_score=y_pred, y_true=y_test))
 
 # %%
