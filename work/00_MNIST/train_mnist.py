@@ -1,4 +1,7 @@
 # %%
+import os
+
+os.environ["OPENBLAS_NUM_THREADS"] = "1"  # numpyに許可するCPUコア数を制限
 import numpy as np
 import pandas as pd
 
@@ -62,8 +65,10 @@ trained_net: MyNeuralNet = train_mgd(
     X=X_train.values,
     y=y_train,
     n_epochs=100,
-    batch_size=100,
-    learning_rate=0.05,
+    batch_size=50,
+    learning_rate=0.1,
+    X_test=X_test.values,
+    y_test=y_test,
 )
 
 # うまく学習できることもあるが。
