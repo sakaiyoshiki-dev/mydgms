@@ -69,6 +69,25 @@ class ReLU(Layer):
 
 
 @dataclass
+class Softmax(Layer):
+    def softmax(self, x: Tensor) -> Tensor:
+        # 数値安定化のために最大値を引く
+        x = x - np.max(x, axis=1, keepdims=True)
+        exp_x = np.exp(x)
+        return exp_x / np.sum(exp_x, axis=1, keepdims=True)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.softmax(x=x)
+
+    def backward(self, x: Tensor, din: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
+        y = self.forward(x=x)
+        return din * y * (1 - y), {}
+
+    def update(self, params_step: dict[str, Tensor]) -> Self:
+        return self
+
+
+@dataclass
 class Dense(Layer):
     """
     全結合関数
@@ -133,6 +152,12 @@ class Dense(Layer):
             W=self.W + params_step["W"],
             b=self.b + params_step["b"],
         )
+
+    @classmethod
+    def init(cls: Self, d, M) -> Self:
+        W = np.zeros((d, M))
+        b = np.zeros(M)
+        return cls(W=W, b=b)
 
 
 @dataclass

@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from mydgms.neuralnet import MyNeuralNet, ReLU, Dense, SquaredLoss
+from mydgms.neuralnet import MyNeuralNet, ReLU, Dense, Softmax, SquaredLoss
 
 
 def test_ReLU層の数値検証():
@@ -51,6 +51,42 @@ def test_Dense1層の勾配検証():
         grads["W"], np.array([[20.0, -20.0], [3.5, -3.5], [7.0, -7.0], [10.5, -10.5], [-6.0, 6.0]])
     )
     np.testing.assert_allclose(grads["b"], np.array([7.0, -7.0]))
+
+
+def test_Softmax1層の数値検証():
+    # N: 2, d: 5, M: 5
+    softmax = Softmax()
+    x = np.array([[0, 0.5, 1.0, 1.5, -2.0], [2.0, 0.5, -1.0, 1.5, 0.0]])
+
+    y = softmax.forward(x=x)  # NxM = 2x5
+    np.testing.assert_allclose(
+        y,
+        np.array(
+            [[0.10016, 0.165136, 0.272263, 0.448886, 0.013555], [0.496331, 0.110746, 0.024711, 0.30104, 0.067171]]
+        ),
+        atol=1e-5,
+    )
+    np.testing.assert_allclose(
+        y.sum(axis=1),
+        np.array([1, 1]),
+        atol=1e-5,
+    )
+
+
+def test_Softmax1層の勾配検証():
+    # N: 2, d: 5, M: 5
+    softmax = Softmax()
+    x = np.array([[0, 0.5, 1.0, 1.5, -2.0], [2.0, 0.5, -1.0, 1.5, 0.0]])
+
+    din = np.array([[0, 0.5, 1.0, 1.5, -2.0], [2.0, 0.5, -1.0, 1.5, 0.0]])  # NxM = 2x5
+
+    y, _ = softmax.backward(x=x, din=din)  # NxM = 2x5
+
+    np.testing.assert_allclose(
+        y,
+        np.array([[0.0, 0.068933, 0.198136, 0.371081, -0.026743], [0.499973, 0.049241, -0.0241, 0.315622, 0.0]]),
+        atol=1e-5,
+    )
 
 
 def test_簡単なニューラルネットワークの数値検証():
