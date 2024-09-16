@@ -69,6 +69,7 @@ trained_net: MyNeuralNet = train_mgd(
     learning_rate=0.1,
     X_test=X_test.values,
     y_test=y_test,
+    tolerance=1e-6,
 )
 
 # うまく学習できることもあるが。
