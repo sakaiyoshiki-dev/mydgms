@@ -18,6 +18,9 @@ class Layer:
     def backward(self, x: Tensor, dout: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
         raise NotImplementedError()
 
+    def backward_numerical(self, x: Tensor, dout: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
+        raise NotImplementedError()
+
     def update(self, params_step: dict[str, Tensor]) -> Self:
         raise NotImplementedError()
 
@@ -63,6 +66,29 @@ class ReLU(Layer):
         """
         return dout * np.where(x > 0, 1, 0), {}
 
+    def backward_numerical(self, x: Tensor, dout: Tensor, eps: float) -> tuple[Tensor, dict[str, Tensor]]:
+        """数値部分で勾配を計算
+
+        主にテスト用"""
+        # 数値微分による勾配を確認
+        grad_numerical = np.zeros_like(x)
+        for i in range(x.shape[0]):
+            for j in range(x.shape[1]):
+                original_value = x[i, j]
+
+                x[i, j] = original_value + eps
+                output_plus = self.forward(x)
+
+                x[i, j] = original_value - eps
+                output_minus = self.forward(x)
+
+                grad_numerical[i, j] = np.sum(output_plus - output_minus) / (2 * eps)
+
+                # 元に戻す
+                x[i, j] = original_value
+
+        return dout * grad_numerical, {}
+
     def update(self, params_step: dict[str, Tensor]) -> Self:
         """パラメータをparams_stepの方向に更新する"""
         return self
@@ -71,17 +97,58 @@ class ReLU(Layer):
 @dataclass
 class Softmax(Layer):
     def softmax(self, x: Tensor) -> Tensor:
-        # 数値安定化のために最大値を引く
-        x = x - np.max(x, axis=1, keepdims=True)
-        exp_x = np.exp(x)
+        exp_x = np.exp(x - np.max(x, axis=1, keepdims=True))  # 数値安定化のために最大値を引く
         return exp_x / np.sum(exp_x, axis=1, keepdims=True)
 
     def forward(self, x: Tensor) -> Tensor:
         return self.softmax(x=x)
 
     def backward(self, x: Tensor, dout: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
-        y = self.forward(x=x)
-        return dout * y * (1 - y), {}
+        s = self.forward(x=x)
+        dint = s * (dout - np.sum(dout * s, axis=1, keepdims=True))
+        # 参考: https://chatgpt.com/share/66e8e572-b6ec-800e-9092-5e86d21683f4 で計算
+        return dint, {}
+
+    def backward_numerical(self, x: Tensor, dout: Tensor, eps: float) -> tuple[Tensor, dict[str, Tensor]]:
+        """数値部分で勾配を計算
+
+        主にテスト用
+
+        Parameters
+        ----------
+        x : Tensor
+            N x d
+            この層の入力であって、ニューラルネットワーク全体の入力ではない点に注意
+        dout: Tensor
+            N x d
+            上の層から降ってきた勾配dy/du
+
+        Returns
+        -------
+        Tensor
+            N x d
+            下の層へ降ろす勾配dy/dx
+        dict[str, Tensor]
+            この層のパラメータについての勾配
+        """
+        N, d = x.shape
+        jacobian = np.zeros((N, d, d))
+
+        for i in range(d):  # 各入力要素に対して数値微分を計算
+            x_plus = np.copy(x)
+            x_minus = np.copy(x)
+            x_plus[:, i] += eps
+            x_minus[:, i] -= eps
+            # 各行にソフトマックスを適用した結果の差分を取る
+            jacobian[:, :, i] = (self.forward(x_plus) - self.forward(x_minus)) / (2 * eps)
+
+        din = np.zeros_like(dout)
+        for n in range(N):
+            dout_n = dout[n, :]  # 1 x d
+            jac_n = jacobian[n, :, :]  # d x d
+
+            din[n, :] = np.dot(dout_n, jac_n)
+        return din, {}
 
     def update(self, params_step: dict[str, Tensor]) -> Self:
         return self
