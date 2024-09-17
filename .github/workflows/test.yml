@@ -24,18 +24,21 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: "3.12"
-        # cache: "pip"
-        # cache-dependency-path: '**/pyproject.toml'
+
     - name: Cache pip dependencies
       uses: actions/cache@v3
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}  # pyproject.tomlを元にキャッシュキーを生成
+        path: .venv
+        key: ${{ runner.os }}-venv-${{ hashFiles('pyproject.toml') }}  # pyproject.tomlを元にキャッシュキーを生成
         restore-keys: |
-          ${{ runner.os }}-pip-    
+          ${{ runner.os }}-venv-    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
+        if [ ! -d ".venv" ]; then  # 仮想環境がない場合のみ作成
+          python -m venv .venv
+        fi
+        source .venv/bin/activate
         pip install .
     - name: Test with pytest
       run: |
