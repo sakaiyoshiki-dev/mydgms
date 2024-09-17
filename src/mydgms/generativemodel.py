@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 import numpy as np
 from itertools import product
+from typing import Self
 
 from .neuralnet import MyNeuralNet, Tensor, Loss
 
@@ -41,7 +42,7 @@ class MyBinaryEnergyBasedModel(BaseGenerativeModel):
 
         """
         energy_val, _ = self.energy_func.forward(x)
-        return np.exp(-energy_val) / self.partition
+        return np.exp(-np.squeeze(energy_val)) / self.partition
 
     def logprob(self, x: Tensor) -> Tensor:
         """
@@ -55,16 +56,28 @@ class MyBinaryEnergyBasedModel(BaseGenerativeModel):
         energy_val, _ = self.energy_func.forward(x)
         return -energy_val - np.log(self.partition)
 
+    def update(self, params_step: list[dict[str, Tensor]]) -> Self:
+        """
+        パラメータ群を更新する
+        いまのインスタンスは更新せず、新しいインスタンスを生成する。
+        """
+        new_net = self.energy_func.update(params_step=params_step)
+        return MyBinaryEnergyBasedModel(energy_func=new_net, d_input=self.d_input)
+
 
 class LogLoss(Loss):
     """負の対数損失"""
 
     def eval(self, ebm: MyBinaryEnergyBasedModel, X: Tensor) -> float:
         energy_val, _ = ebm.energy_func.forward(x=X)
-        return energy_val + np.log(ebm.partition)
+        return (energy_val + np.log(ebm.partition)).sum() / X.shape[0]
 
     def backward(self, ebm: MyBinaryEnergyBasedModel, X: Tensor) -> Tensor:
         raise NotImplementedError()
 
     def gradient(self, ebm: MyBinaryEnergyBasedModel, X: Tensor) -> list[dict[str, Tensor]]:
-        raise NotImplementedError()
+        energy_grads: list[dict[str, Tensor]] = ebm.energy_func.gradient(x=X)
+        grad_1st = []
+        for grad in energy_grads:
+            grad_1st.append({param: grad_p.sum(axis=0) / X.shape[0] for param, grad_p in grad.items()})
+        return grad_1st

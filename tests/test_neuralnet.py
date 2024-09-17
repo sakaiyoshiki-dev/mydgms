@@ -154,7 +154,7 @@ def test_簡単なニューラルネットワークの勾配検証():
     dout = np.array([[-3.0, 3.0], [10.0, -10.0]])  # NxM = 2x2
 
     # 実行
-    dout, grads = net.gradient(x=x, dout=dout)
+    dout, grads = net.backward(x=x, dout=dout)
 
     # 検証
     np.testing.assert_allclose(grads[0]["W"], np.array([[20.0, 0.0], [3.5, 0.0], [7.0, 0.0], [10.5, 0.0], [24.0, 0.0]]))
