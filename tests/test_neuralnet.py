@@ -19,11 +19,24 @@ def test_ReLU層の勾配検証():
     relu = ReLU()
     x = np.array([[0, 0.5, 1.0, 1.5, -2.0], [2.0, 0.5, -1.0, 1.5, 0.0]])
 
-    din = np.array([[0, 0.5, 1.0, 1.5, -2.0], [2.0, 0.5, -1.0, 1.5, 0.0]])  # NxM = 2x5
+    dout = np.array([[0, 0.5, 1.0, 1.5, -2.0], [2.0, 0.5, -1.0, 1.5, 0.0]])  # NxM = 2x5
 
-    y, _ = relu.backward(x=x, din=din)  # NxM = 2x5
+    y, _ = relu.backward(x=x, dout=dout)  # NxM = 2x5
 
     np.testing.assert_allclose(y, np.array([[0, 0.5, 1.0, 1.5, 0.0], [2.0, 0.5, 0.0, 1.5, 0.0]]))
+
+
+def test_ReLU層の勾配を数値微分と比較():
+    # N: 2, d: 5, M: 5
+    N, d, M = 2, 5, 5
+    relu = ReLU()
+    x = np.random.randn(N, d)
+    dout = np.random.randn(N, M)
+
+    din_back, grads = relu.backward(x=x, dout=dout)  # NxM = 2x5
+
+    din_numerical, grads_ = relu.backward_numerical(x=x, dout=dout, eps=1e-7)
+    np.testing.assert_allclose(din_back, din_numerical, atol=1e-5)
 
 
 def test_Dense1層の数値検証():
@@ -40,8 +53,8 @@ def test_Dense1層の勾配検証():
     dense = Dense(W=np.array([[-2, -1], [-1, -5], [0, 3], [1, -1], [2, -4]]), b=np.array([-1, 2]))
     x = np.array([[0, 0.5, 1.0, 1.5, 2.0], [2.0, 0.5, 1.0, 1.5, 0.0]])
 
-    din = np.array([[-3.0, 3.0], [10.0, -10.0]])  # NxM
-    dout, grads = dense.backward(x=x, din=din)
+    dout = np.array([[-3.0, 3.0], [10.0, -10.0]])  # NxM
+    dout, grads = dense.backward(x=x, dout=dout)
     # dout: Nxd
     # grads["W"]: dxM
     # grads["b"]: M
@@ -73,20 +86,35 @@ def test_Softmax1層の数値検証():
     )
 
 
-def test_Softmax1層の勾配検証():
+def test_Softmax層の数値微分を検証():
     # N: 2, d: 5, M: 5
+    N, d, M = 2, 5, 5
     softmax = Softmax()
-    x = np.array([[0, 0.5, 1.0, 1.5, -2.0], [2.0, 0.5, -1.0, 1.5, 0.0]])
+    x = np.array([[1.0, 2.0, 3.0], [-0.05, 0.0, 0.05]])
+    dout = np.array([[1.0, 2.0, 3.0], [-0.05, 0.0, 0.05]])
 
-    din = np.array([[0, 0.5, 1.0, 1.5, -2.0], [2.0, 0.5, -1.0, 1.5, 0.0]])  # NxM = 2x5
+    din_numerical, grads_ = softmax.backward_numerical(x=x, dout=dout, eps=1e-7)
 
-    y, _ = softmax.backward(x=x, din=din)  # NxM = 2x5
-
-    np.testing.assert_allclose(
-        y,
-        np.array([[0.0, 0.068933, 0.198136, 0.371081, -0.026743], [0.499973, 0.049241, -0.0241, 0.315622, 0.0]]),
-        atol=1e-5,
+    din_true = np.array(
+        [
+            [-0.14181709, -0.14077036, 0.28258745],
+            [-0.01636842, -0.00055486, 0.01692328],
+        ]
     )
+    np.testing.assert_allclose(din_numerical, din_true, atol=1e-5)
+
+
+def test_Softmax層の勾配を数値微分と比較():
+    # N: 2, d: 5, M: 5
+    N, d, M = 2, 5, 5
+    softmax = Softmax()
+    x = np.random.randn(N, d)
+    dout = np.random.randn(N, M)
+
+    din_back, grads = softmax.backward(x=x, dout=dout)  # NxM = 2x5
+
+    din_numerical, grads_ = softmax.backward_numerical(x=x, dout=dout, eps=1e-7)
+    np.testing.assert_allclose(din_back, din_numerical, atol=1e-5)
 
 
 def test_簡単なニューラルネットワークの数値検証():
@@ -123,10 +151,10 @@ def test_簡単なニューラルネットワークの勾配検証():
         d_output=2,
     )
     x = np.array([[0, 0.5, 1.0, 1.5, 2.0], [2.0, 0.5, 1.0, 1.5, 3.0]])
-    din = np.array([[-3.0, 3.0], [10.0, -10.0]])  # NxM = 2x2
+    dout = np.array([[-3.0, 3.0], [10.0, -10.0]])  # NxM = 2x2
 
     # 実行
-    dout, grads = net.gradient(x=x, din=din)
+    dout, grads = net.gradient(x=x, dout=dout)
 
     # 検証
     np.testing.assert_allclose(grads[0]["W"], np.array([[20.0, 0.0], [3.5, 0.0], [7.0, 0.0], [10.5, 0.0], [24.0, 0.0]]))
