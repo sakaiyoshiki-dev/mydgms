@@ -122,7 +122,7 @@ def train_generative_mgd(
         previous_loss = train_loss
 
         # 1エポックごとに損失を表示
-        if epoch % 5 == 0:
+        if epoch % 10 == 0:
             test_loss = None
             if isinstance(X_test, Tensor):
                 test_loss = loss.eval(ebm=ebm, X=X_test)

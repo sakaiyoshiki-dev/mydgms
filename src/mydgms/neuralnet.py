@@ -221,13 +221,10 @@ class Dense(Layer):
         )
 
     @classmethod
-    def init(cls: Self, d, M, rand=True) -> Self:
-        if rand:
-            W = 0.01 * np.random.randn(d, M)  # 初期値は小さいほうがよい（ゼロつくより）
-            b = 0.01 * np.random.randn(M)
-        else:
-            W = np.zeros((d, M))  # 初期値が0はまずい（ゼロつくより）
-            b = np.zeros(M)
+    def init(cls: Self, d, M, seed=1234) -> Self:
+        np.random.seed(seed)
+        W = 0.01 * np.random.randn(d, M)  # 初期値は小さいほうがよい（ゼロつくより）
+        b = 0.01 * np.random.randn(M)
         return cls(W=W, b=b)
 
 
@@ -240,8 +237,6 @@ class MyNeuralNet:
 
     def __post_init__(self):
         self.n_depths = len(self.layers)
-        self.d_input
-        self.d_output
 
     def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
         """
@@ -268,7 +263,7 @@ class MyNeuralNet:
             x_l = layer.forward(x_l)
         return x_l, us
 
-    def gradient(self, x: Tensor, dout: Tensor) -> tuple[Tensor, list[dict[str, Tensor]]]:
+    def backward(self, x: Tensor, dout: Tensor) -> tuple[Tensor, list[dict[str, Tensor]]]:
         """
         x: Tensor
         dout: Tensor
@@ -298,6 +293,13 @@ class MyNeuralNet:
         new_layers = [layer.update(param_step) for layer, param_step in zip(self.layers, params_step)]
         return MyNeuralNet(layers=new_layers, d_input=self.d_input, d_output=self.d_output)
 
+    def gradient(self, x: Tensor) -> list[dict[str, Tensor]]:
+        """ニューラルネットワーク自身のパラメータについての勾配を計算"""
+        _, grads = self.backward(
+            x=x, dout=np.ones((x.shape[0], self.d_output))
+        )  # dout = [1,...,1]とすればbackward()が使えるという仮説
+        return grads
+
 
 @dataclass
 class Loss:
@@ -326,22 +328,6 @@ class SquaredLoss(Loss):
         y_pred, _ = net.forward(x=X)
         return np.sum((y_pred - y) ** 2) / y.shape[0] / 2
 
-    def backward(self, net: MyNeuralNet, X: Tensor, y: Tensor) -> Tensor:
-        """二乗誤差関数の逆伝播
-        Parameters
-        ----------
-        net: MyNeuralNet
-        X: Tensor
-        y: Tensor
-
-        Return
-        ------
-        Tensor
-            ニューラルネットワークに渡すdy/du
-        """
-        y_pred, _ = net.forward(x=X)
-        return (y_pred - y) / y.shape[0]
-
     def gradient(self, net: MyNeuralNet, X: Tensor, y: Tensor) -> list[dict[str, Tensor]]:
         """二乗誤差関数の勾配計算
         Parameters
@@ -355,6 +341,7 @@ class SquaredLoss(Loss):
         list[dict[str, Tensor]
             各層の、パラメータごとの勾配ベクトル
         """
-        din = self.backward(net=net, X=X, y=y)
-        _, grads = net.gradient(x=X, dout=din)
+        y_pred, _ = net.forward(x=X)
+        dL_dy = (y_pred - y) / y.shape[0]
+        _, grads = net.backward(x=X, dout=dL_dy)
         return grads

@@ -44,9 +44,9 @@ y_test = lb.transform(y_test)
 # 学習
 init_net = MyNeuralNet(
     layers=[
-        Dense.init(d=13, M=5, rand=True),
+        Dense.init(d=13, M=5, seed=1234),
         ReLU(),
-        Dense.init(d=5, M=3, rand=True),
+        Dense.init(d=5, M=3, seed=1234),
         Softmax(),
     ],
     d_input=13,
