@@ -221,13 +221,10 @@ class Dense(Layer):
         )
 
     @classmethod
-    def init(cls: Self, d, M, rand=True) -> Self:
-        if rand:
-            W = 0.01 * np.random.randn(d, M)  # 初期値は小さいほうがよい（ゼロつくより）
-            b = 0.01 * np.random.randn(M)
-        else:
-            W = np.zeros((d, M))  # 初期値が0はまずい（ゼロつくより）
-            b = np.zeros(M)
+    def init(cls: Self, d, M, seed=1234) -> Self:
+        np.random.seed(seed)
+        W = 0.01 * np.random.randn(d, M)  # 初期値は小さいほうがよい（ゼロつくより）
+        b = 0.01 * np.random.randn(M)
         return cls(W=W, b=b)
 
 
