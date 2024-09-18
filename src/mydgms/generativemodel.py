@@ -64,6 +64,21 @@ class MyBinaryEnergyBasedModel(BaseGenerativeModel):
         new_net = self.energy_func.update(params_step=params_step)
         return MyBinaryEnergyBasedModel(energy_func=new_net, d_input=self.d_input)
 
+    def grads_log_partition(self) -> list[dict[str, Tensor]]:
+        """分配関数の勾配を直接計算"""
+        x_all = np.array([pattern for pattern in product([0, 1], repeat=2)])
+        prob_all = self.prob(x=x_all)
+
+        grads_ret = [{} for _ in range(len(self.energy_func.layers))]  # 先に箱を用意しておく
+        for x, prob in zip(x_all, prob_all):  # 全パターンに対して
+            grads_energy: list[dict[str, Tensor]] = self.energy_func.gradient(x=np.array([x]))
+            for i, grad_energy in enumerate(grads_energy):
+                for param_name, grad in grad_energy.items():
+                    if param_name not in grads_ret[i]:
+                        grads_ret[i][param_name] = 0
+                    grads_ret[i][param_name] += prob * grad
+        return grads_ret
+
 
 class LogLoss(Loss):
     """負の対数損失"""
@@ -72,12 +87,14 @@ class LogLoss(Loss):
         energy_val, _ = ebm.energy_func.forward(x=X)
         return (energy_val + np.log(ebm.partition)).sum() / X.shape[0]
 
-    def backward(self, ebm: MyBinaryEnergyBasedModel, X: Tensor) -> Tensor:
-        raise NotImplementedError()
-
     def gradient(self, ebm: MyBinaryEnergyBasedModel, X: Tensor) -> list[dict[str, Tensor]]:
-        energy_grads: list[dict[str, Tensor]] = ebm.energy_func.gradient(x=X)
-        grad_1st = []
-        for grad in energy_grads:
-            grad_1st.append({param: grad_p.sum(axis=0) / X.shape[0] for param, grad_p in grad.items()})
-        return grad_1st
+        grads_enegy: list[dict[str, Tensor]] = ebm.energy_func.gradient(x=X)
+        grads_log_partition: list[dict[str, Tensor]] = ebm.grads_log_partition()
+
+        grads_ret = []
+        for grad_energy, grad_part in zip(grads_enegy, grads_log_partition):
+            grad_ret = {}
+            for param_name in grad_energy.keys():
+                grad_ret[param_name] = grad_energy[param_name] / X.shape[0] - grad_part[param_name]
+            grads_ret.append(grad_ret)
+        return grads_ret
