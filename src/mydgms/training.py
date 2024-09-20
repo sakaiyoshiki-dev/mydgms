@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 import numpy as np
 from .neuralnet import MyNeuralNet, Tensor, Loss
-from .generativemodel import MyBinaryEnergyBasedModel, LogLoss
+from .generative import MyBinaryEnergyBasedModel, LogLoss
 
 
 def create_mini_batches(X: Tensor, y: Tensor, batch_size: int):
