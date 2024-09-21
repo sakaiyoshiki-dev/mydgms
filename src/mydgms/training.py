@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 import numpy as np
 from .neuralnet import MyNeuralNet, Tensor, Loss
-from .generative import MyBinaryEnergyBasedModel, LogLoss
+from .generative import MyBinaryEnergyBasedModel, MyEnergyBasedModel, LogLoss, CDLoss
 
 
 def create_mini_batches(X: Tensor, y: Tensor, batch_size: int):
@@ -82,7 +82,8 @@ def create_mini_batches_X(X: Tensor, batch_size: int):
 
 
 def train_generative_mgd(
-    init_ebm: MyBinaryEnergyBasedModel,
+    init_ebm: MyBinaryEnergyBasedModel | MyEnergyBasedModel,
+    loss: LogLoss | CDLoss,
     X: Tensor,
     n_epochs: int,
     batch_size: int,
@@ -95,8 +96,6 @@ def train_generative_mgd(
     最適化アルゴリズムはミニバッチ勾配降下法を採用する。
     """
     n_samples = X.shape[0]
-
-    loss = LogLoss()
 
     # メインループ
     ebm = init_ebm

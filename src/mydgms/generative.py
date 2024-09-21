@@ -7,13 +7,7 @@ from .neuralnet import MyNeuralNet, Tensor, Loss
 
 
 @dataclass
-class BaseGenerativeModel:
-    def prob(self, x: Tensor) -> np.ndarray:
-        raise NotImplementedError()
-
-
-@dataclass
-class MyBinaryEnergyBasedModel(BaseGenerativeModel):
+class MyBinaryEnergyBasedModel:
     """0/1バイナリの入力変数に対するエネルギーベースモデル"""
 
     energy_func: MyNeuralNet
@@ -81,15 +75,43 @@ class MyBinaryEnergyBasedModel(BaseGenerativeModel):
 
 
 @dataclass
-class MyEnergyBasedModel(BaseGenerativeModel):
+class MyEnergyBasedModel:
     """一般のエネルギーベースモデル
 
     分配関数の計算が難しいため、サンプリングで近似していく必要がある"""
 
-    pass
+    energy_func: MyNeuralNet
+    d_input: int
+
+    def update(self, params_step: list[dict[str, Tensor]]) -> Self:
+        new_net = self.energy_func.update(params_step=params_step)
+        return MyEnergyBasedModel(energy_func=new_net, d_input=self.d_input)
 
 
-class LogLoss(Loss):
+class LangevinMCSampler:
+    """ランジュバンモンテカルロ法によるサンプリング器"""
+
+    def sample_from_ebm(self, ebm: MyEnergyBasedModel) -> Tensor:
+        """EBMを前提にサンプリングする
+
+        EBMでなくスコア関数が陽に与えられたときは別"""
+
+        # ebm.energy_func (MyNeuralNet) に入力についての微分をさせる必要がある。
+        dout = np.ones((1, ebm.energy_func.d_output)) / 1  # dout = [1/N,...,1/N]
+        score_func = lambda x: ebm.energy_func.backward(x=x, dout=dout)[0]  # TODO: スコア関数が適切に実装されていない
+
+        x_0 = np.random.normal(loc=0, scale=1, size=ebm.d_input)
+        step_size = 50
+        x_t = x_0
+        eta = 0.1
+        sigma = 1
+        for t in range(step_size):
+            x_t = x_t - eta * score_func(x=np.array([x_t])) + np.random.normal(loc=0, scale=sigma, size=ebm.d_input)
+
+        raise x_t
+
+
+class LogLoss:
     """負の対数損失"""
 
     def eval(self, ebm: MyBinaryEnergyBasedModel, X: Tensor) -> float:
@@ -100,10 +122,51 @@ class LogLoss(Loss):
         grads_energy: list[dict[str, Tensor]] = ebm.energy_func.gradient(x=X)
         grads_log_partition: list[dict[str, Tensor]] = ebm.grads_log_partition()
 
+        # 勾配の統合
         grads_ret = []
         for grad_energy, grad_part in zip(grads_energy, grads_log_partition):
             grad_ret = {}
             for param_name in grad_energy.keys():
-                grad_ret[param_name] = grad_energy[param_name] / X.shape[0] - grad_part[param_name]
+                grad_ret[param_name] = grad_energy[param_name] - grad_part[param_name]
+            grads_ret.append(grad_ret)
+        return grads_ret
+
+
+@dataclass
+class CDLoss:
+    """いわゆるContrastive Divergence損失
+
+    参考: [Tutorial 8: Deep Energy-Based Generative Models](https://uvadlc-notebooks.readthedocs.io/en/latest/tutorial_notebooks/tutorial8/Deep_Energy_Models.html)
+    """
+
+    sampler: LangevinMCSampler
+    # サンプリング器は損失関数に付随するものとする
+
+    def eval(self, ebm: MyEnergyBasedModel, X: Tensor) -> float:
+        """
+        CD損失 = エネルギー関数のデータ平均 - エネルギー関数のモデルサンプル平均
+        """
+        energies_data, _ = ebm.energy_func.forward(x=X)  # サンプル数×1
+
+        X_model = self.sampler.sample_from_ebm(ebm=ebm)
+        energies_model, _ = ebm.energy_func.forward(x=X_model)  # サンプル数×1
+
+        return energies_data.mean() - energies_model.mean()
+
+    def gradient(self, ebm: MyEnergyBasedModel, X: Tensor) -> list[dict[str, Tensor]]:
+        """
+        CD損失の勾配 = エネルギー関数勾配のデータ平均 - エネルギー関数勾配のモデルサンプル平均
+        """
+        # データパート
+        grads_energy_data: list[dict[str, Tensor]] = ebm.energy_func.gradient(x=X)
+
+        # モデルパート
+        X_model = self.sampler.sample_from_ebm(ebm=ebm)
+        grads_energy_model: list[dict[str, Tensor]] = ebm.energy_func.gradient(x=X_model)
+
+        # 勾配の統合
+        grads_ret = []
+        for grad_data, grad_model in zip(grads_energy_data, grads_energy_model):
+            grad_ret = {param_name: grad_data[param_name] - grad_model[param_name] for param_name in grad_data.keys()}
             grads_ret.append(grad_ret)
         return grads_ret

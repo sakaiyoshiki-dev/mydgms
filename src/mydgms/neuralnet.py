@@ -294,10 +294,12 @@ class MyNeuralNet:
         return MyNeuralNet(layers=new_layers, d_input=self.d_input, d_output=self.d_output)
 
     def gradient(self, x: Tensor) -> list[dict[str, Tensor]]:
-        """ニューラルネットワーク自身のパラメータについての勾配を計算"""
-        _, grads = self.backward(
-            x=x, dout=np.ones((x.shape[0], self.d_output))
-        )  # dout = [1,...,1]とすればbackward()が使えるという仮説
+        """ニューラルネットワーク自身のパラメータについての勾配を計算
+
+        xのサンプル数の平均をとる"""
+        n_samples: int = x.shape[0]
+        dout = np.ones((x.shape[0], self.d_output)) / n_samples  # dout = [1/N,...,1/N]
+        _, grads = self.backward(x=x, dout=dout)
         return grads
 
 
