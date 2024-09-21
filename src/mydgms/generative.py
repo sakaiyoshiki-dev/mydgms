@@ -80,6 +80,15 @@ class MyBinaryEnergyBasedModel(BaseGenerativeModel):
         return grads_ret
 
 
+@dataclass
+class MyEnergyBasedModel(BaseGenerativeModel):
+    """一般のエネルギーベースモデル
+
+    分配関数の計算が難しいため、サンプリングで近似していく必要がある"""
+
+    pass
+
+
 class LogLoss(Loss):
     """負の対数損失"""
 
@@ -88,11 +97,11 @@ class LogLoss(Loss):
         return (energy_val + np.log(ebm.partition)).sum() / X.shape[0]
 
     def gradient(self, ebm: MyBinaryEnergyBasedModel, X: Tensor) -> list[dict[str, Tensor]]:
-        grads_enegy: list[dict[str, Tensor]] = ebm.energy_func.gradient(x=X)
+        grads_energy: list[dict[str, Tensor]] = ebm.energy_func.gradient(x=X)
         grads_log_partition: list[dict[str, Tensor]] = ebm.grads_log_partition()
 
         grads_ret = []
-        for grad_energy, grad_part in zip(grads_enegy, grads_log_partition):
+        for grad_energy, grad_part in zip(grads_energy, grads_log_partition):
             grad_ret = {}
             for param_name in grad_energy.keys():
                 grad_ret[param_name] = grad_energy[param_name] / X.shape[0] - grad_part[param_name]

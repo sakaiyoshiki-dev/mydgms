@@ -3,10 +3,10 @@ import numpy as np
 import pytest
 from mydgms.neuralnet import MyNeuralNet, ReLU, Dense, Loss, Tensor
 from mydgms.training import train_generative_mgd
-from mydgms.generativemodel import MyBinaryEnergyBasedModel
+from mydgms.generative import MyBinaryEnergyBasedModel
 
 
-def test_BinaryEnegeyBasedModel_確率確認():
+def test_BinaryEnergyBasedModel_確率確認():
     # 準備
     x = np.array(
         [
@@ -16,7 +16,7 @@ def test_BinaryEnegeyBasedModel_確率確認():
             [1, 1],
         ]
     )
-    enegey_func = MyNeuralNet(
+    energy_func = MyNeuralNet(
         layers=[
             Dense(W=np.array([[1, 2], [3, 4]]), b=np.array([0.5, 0.7])),
             ReLU(),
@@ -25,7 +25,7 @@ def test_BinaryEnegeyBasedModel_確率確認():
         d_input=2,
         d_output=1,
     )
-    ebm = MyBinaryEnergyBasedModel(energy_func=enegey_func, d_input=2)
+    ebm = MyBinaryEnergyBasedModel(energy_func=energy_func, d_input=2)
 
     # 実行
     probs = ebm.prob(x=x)
@@ -36,9 +36,9 @@ def test_BinaryEnegeyBasedModel_確率確認():
     np.testing.assert_allclose(probs, expected, atol=1e-5)
 
 
-def test_BinaryEnegeyBasedModel_学習():
+def test_BinaryEnergyBasedModel_学習():
     x = np.array([[0, 0]] * 500 + [[1, 0]] * 100 + [[1, 1]] * 400)
-    enegey_func = MyNeuralNet(
+    energy_func = MyNeuralNet(
         layers=[
             Dense.init(d=2, M=4, seed=1234),
             ReLU(),
@@ -47,7 +47,7 @@ def test_BinaryEnegeyBasedModel_学習():
         d_input=2,
         d_output=1,
     )
-    init_ebm = MyBinaryEnergyBasedModel(energy_func=enegey_func, d_input=2)
+    init_ebm = MyBinaryEnergyBasedModel(energy_func=energy_func, d_input=2)
 
     trained_ebm: MyBinaryEnergyBasedModel = train_generative_mgd(
         init_ebm=init_ebm,
